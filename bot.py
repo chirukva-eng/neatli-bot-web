@@ -57,6 +57,6 @@ async def on_startup():
 async def on_shutdown():
     await bot.session.close()
 
-if name == "__main__":
+if __name__ == "__main__":
     port = int(os.getenv("PORT", 10000))
     uvicorn.run("bot:app", host="0.0.0.0", port=port)
