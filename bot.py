@@ -1,42 +1,52 @@
 import os
-import asyncio
-from aiogram import Bot, Dispatcher, types
-from aiogram.types import Message
 from fastapi import FastAPI, Request
-import uvicorn
+from aiogram import Bot, Dispatcher, types
+from aiogram.fsm.storage.memory import MemoryStorage
+from dotenv import load_dotenv
+import asyncio
 
-# Загружаем токен из переменных окружения
+load_dotenv()
+
 TOKEN = os.getenv("BOT_TOKEN")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://neatli-bot-web.onrender.com/webhook")
+
 bot = Bot(token=TOKEN)
-dp = Dispatcher()
+dp = Dispatcher(storage=MemoryStorage())
 app = FastAPI()
 
-# === Основная логика бота ===
-@dp.message()
-async def start(message: Message):
-    keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
-        [types.InlineKeyboardButton(text="Задать вопрос", url="https://t.me/neatli_support")]
-    ])
-    await message.answer(
-        "Здравствуйте! Нам очень приятно, что вы приобрели продукцию Neatli.\n\n"
-        "Если у вас возникли вопросы, мы с радостью поможем их решить.\n"
-        "Выберите интересующий вас вопрос из списка или напишите нам в канал поддержки.",
-        reply_markup=keyboard
-    )
 
-# === FastAPI часть для webhook ===
 @app.on_event("startup")
 async def on_startup():
-    # Укажи сюда URL, который Render выдаст (он будет вида https://<имя>.onrender.com)
-    webhook_url = f"{os.getenv('RENDER_EXTERNAL_URL')}/webhook"
-    await bot.set_webhook(webhook_url)
-    print(f"✅ Webhook установлен: {webhook_url}")
+    await bot.set_webhook(WEBHOOK_URL)
+    print(f"✅ Webhook установлен: {WEBHOOK_URL}")
+
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    await bot.delete_webhook()
+    await bot.session.close()
+    print("🛑 Webhook удалён и сессия закрыта.")
+
 
 @app.post("/webhook")
 async def process_webhook(request: Request):
-    update = await request.json()
-    await dp.feed_update(bot, update)
+    update = types.Update.model_validate(await request.json(), context={"bot": bot})
+    await dp._process_update(update)
     return {"ok": True}
 
+
+@app.get("/")
+async def root():
+    return {"status": "running"}
+
+
+# Пример простой команды
+@dp.message()
+async def echo_handler(message: types.Message):
+    await message.answer(f"Привет! Ты написал: {message.text}")
+
+
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
+    import uvicorn
+    print("🚀 Starting server on port 10000...")
+    uvicorn.run("bot:app", host="0.0.0.0", port=10000)
