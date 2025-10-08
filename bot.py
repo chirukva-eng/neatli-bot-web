@@ -20,6 +20,11 @@ dp = Dispatcher()
 
 app = FastAPI()
 
+# === Проверочный роут для Render ===
+@app.get("/")
+async def root():
+    return {"status": "Bot is running"}
+
 # --- Хэндлер команды /start ---
 @dp.message(F.text == "/start")
 async def start_handler(message: types.Message):
